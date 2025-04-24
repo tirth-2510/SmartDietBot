@@ -47,7 +47,6 @@ def generate_chat_response(document_id: str, user_input: str):
             k=3, 
             score_threshold=0.75
         )
-        print("No chunks found running context query.")
     
     if retrieved_docs:
         context = "\n".join(doc[0].page_content for doc in retrieved_docs)
