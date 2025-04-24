@@ -13,7 +13,7 @@ zilliz_token = "7132971a0b87e01075137b4661935bdc69c8e1dfeb71df919e754a4de01a641f
 embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=google_api_key)
 
 if "user_query_history" not in st.session_state:
-    st.session_state.user_query_history = deque(maxlen=10)
+    st.session_state.user_query_history = deque(maxlen=5)
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -50,6 +50,7 @@ def generate_chat_response(document_id: str, user_input: str):
     
     if retrieved_docs:
         context = "\n".join(doc[0].page_content for doc in retrieved_docs)
+        chat_history_str = "\n".join([f"{role}: {message}" for role, message in st.session_state.chat_history])
         prompt = f"""
         You are a highly knowledgeable and empathetic assistant specializing in diabetes.
         Your role is to provide clear, evidence-based answers using retrieved information from a trusted knowledge base.
@@ -57,6 +58,8 @@ def generate_chat_response(document_id: str, user_input: str):
         Never disclose your data source or say "Based on the document..." etc.
         Context: {context}
         Question: {user_input}
+        chat history: {chat_history_str}
+        you can reference this chat history if its present.
         If question is not related to context, or no relevant info is found, reply with:
         "Sorry the question seems Irrelevant." **but do not answer from your knowledge base. EVER**
         """
