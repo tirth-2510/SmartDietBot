@@ -1,0 +1,5 @@
+streamlit==1.37.1
+groq==0.18.0
+pymilvus==2.5.5
+langchain-milvus==0.1.8
+langchain-google-genai==2.0.11
