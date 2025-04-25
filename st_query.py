@@ -102,7 +102,7 @@ st.title("🤖 Smart Diet Planner Chatbot")
 # Sidebar
 with st.sidebar:
     st.header("Knowledge Base")
-    document_id = st.selectbox("Select Knowledge Base", options=get_collections())
+    document_id = st.selectbox("Select Knowledge Base", options=["Craving_Data","Micronutrients_Data"])
 
     # if st.button("🔄 Reset Chat Context"):
     #     st.session_state.user_query_history.clear()
