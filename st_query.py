@@ -4,10 +4,10 @@ from groq import Groq
 from langchain_milvus import Milvus
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-groq_api_key = "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"
-google_api_key = "AIzaSyDLcG8HMNCENFMwZXxFjOxEDbnYgCdiXc0"
-zilliz_uri = "https://in03-a0e565d8a9c33e2.serverless.gcp-us-west1.cloud.zilliz.com"
-zilliz_token = "7132971a0b87e01075137b4661935bdc69c8e1dfeb71df919e754a4de01a641ff9de3d12ff25d85da2a6ebbea08757f60cc5b06e"
+groq_api_key = st.secrets["GROQ_API_KEY"]
+google_api_key = st.secrets["GOOGLE_API_KEY"]
+zilliz_uri = st.secrets["ZILLIZ_URI"]
+zilliz_token = st.secrets["ZILLIZ_TOKEN"]
 
 # Embedding model
 embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=google_api_key)
