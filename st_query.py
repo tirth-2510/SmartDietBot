@@ -22,6 +22,16 @@ if "chat_history" not in st.session_state:
 def get_groq_client():
     return Groq(api_key=groq_api_key)
 
+def get_collections():
+    vector_store = Milvus(
+        connection_args={"uri":zilliz_uri, "token": zilliz_token},
+        index_params={"index_type": "IVF_PQ", "metric_type": "COSINE"},
+        embedding_function=embeddings
+    )
+
+    collections = vector_store.client.list_collections()
+    return collections
+
 def generate_chat_response(document_id: str, user_input: str):
     st.session_state.user_query_history.append(user_input)
     contextual_query = " ".join(st.session_state.user_query_history)
@@ -81,6 +91,7 @@ def generate_chat_response(document_id: str, user_input: str):
                     yield content
         client.close()
     else:
+        vector_store.client.close()
         yield "Sorry the question seems Irrelevant."
 
 # <---------------- UI ------------------>
@@ -91,8 +102,7 @@ st.title("🤖 Smart Diet Planner Chatbot")
 # Sidebar
 with st.sidebar:
     st.header("Knowledge Base")
-    st.text("Craving_Data")
-    document_id = "Craving_Data"
+    document_id = st.selectbox("Select Knowledge Base", options=get_collections())
 
     # if st.button("🔄 Reset Chat Context"):
     #     st.session_state.user_query_history.clear()
