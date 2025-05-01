@@ -36,7 +36,7 @@ if "chat_history" not in st.session_state:
 
 # Setup vector store
 vector_store = Milvus(
-    collection_name="Food_Details",  # Default, overridden by sidebar
+    collection_name="Food_Details",
     connection_args={"uri": zilliz_uri, "token": zilliz_token},
     index_params={"index_type": "IVF_PQ", "metric_type": "COSINE"},
     embedding_function=embeddings
@@ -156,11 +156,7 @@ st.title("🤖 Smart Diet Planner Chatbot")
 # Sidebar for knowledge base selection
 with st.sidebar:
     st.header("Knowledge Base")
-    document_id = st.selectbox(
-        "Select Knowledge Base",
-        options=["Food_Details", "Hydration_Data", "Craving_Data", "Oil_Intake_Data", "Nutrients_Data"]
-    )
-    vector_store.collection_name = document_id
+    st.text("Food_Details")
 
 # Chat input
 user_input = st.chat_input("Question...")
