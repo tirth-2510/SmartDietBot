@@ -51,7 +51,7 @@ def get_query_relationship(new_query: str):
     if not st.session_state.conversation_history:
         return 0.0
     else:
-        last_query = st.session_state.conversation_history[-1][-1]["content"]
+        last_query ="Q: "+st.session_state.conversation_history[-1][0]["content"]+"\nA: "+ st.session_state.conversation_history[-1][-1]["content"]
         prompt = f"""
             Given two messages, decide whether the second message is a continuation of the topic in the first message, or if it's a new, unrelated topic.
             Return only the score between 0 and 1 where 0 is not related and 1 being 100% related and NOTHING ELSE.
