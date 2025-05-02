@@ -1,4 +1,5 @@
 import streamlit as st
+import ast
 from collections import deque
 from groq import Groq
 from langchain_milvus import Milvus
@@ -30,6 +31,9 @@ if "user_query_history" not in st.session_state:
 
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = deque(maxlen=3)
+    
+if "conversation_with_context_history" not in st.session_state:
+    st.session_state.conversation_with_context_history = deque(maxlen=3)
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -49,39 +53,67 @@ def get_groq_client():
 # Is query related to the last conversation?
 def get_query_relationship(new_query: str):
     if not st.session_state.conversation_history:
-        return 0.0
+        return {"score": 0, "need_context": False}
     else:
-        last_query ="Q: "+st.session_state.conversation_history[-1][0]["content"]+"\nA: "+ st.session_state.conversation_history[-1][-1]["content"]
+        last_query = "\n".join(["Q: "+chatpair[0]["content"]+"\nA: "+chatpair[-1]["content"] for chatpair in st.session_state.conversation_history])
+        # last_query ="Q: "+st.session_state.conversation_history[-1][0]["content"]+"\nA: "+ st.session_state.conversation_history[-1][-1]["content"]
+        
         prompt = f"""
-            Given two messages, decide whether the second message is a continuation of the topic in the first message, or if it's a new, unrelated topic.
-            Return only the score between 0 and 1 where 0 is not related and 1 being 100% related and NOTHING ELSE.
-            last_query: "{last_query}"
+            You are given a conversation history between a user and an assistant. Then a new query is asked by the user.
+
+            Determine whether the new query is contextually related to the *topic or intent* of the earlier conversation — even if the words differ — or if it introduces a new, unrelated topic.
+
+            Instructions:
+            - Return a dictionary with:
+            - "score": float between 0 and 1, where 0 means totally unrelated, 1 means entirely related.
+                (NOTE: If it's a follow-up question or a shift in subtopic that still relates to the original intent — like continuing a health-related conversation — then score it above 0.75.)
+            - "need_context": True if additional context or information is needed to accurately determine relationship.
+
+            **Always respond in dictionary format:**
+            Example:
+            Conversation history: Q: I am Maharashtrian, diabetic, suggest me good breakfast
+                                  A: I recommend Jowar Dosa + Sambhar as a good diabetic breakfast for Maharashtrians."
+            new_query: "Suggest me supplements instead."
+            return: {{'score': 0.9, 'need_context': True}}
+
+            Conversation history: "{last_query}"
             new_query: "{new_query}"
-        """
+            return : 
+        """   
         llm = get_groq_client()
         response = llm.chat.completions.create(
             model="llama3-70b-8192",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5,
         )
-        score = float(response.choices[0].message.content.strip())
-        return score
+        response = response.choices[0].message.content.strip()
+        return ast.literal_eval(response)
 
 # Generate assistant response
 def generate_chat_response(user_input: str):
     client = get_groq_client()
     st.session_state.user_query_history.append(user_input)
-    
-    score = get_query_relationship(user_input)
-    
+    response = get_query_relationship(user_input)
+    score = response["score"]
+    need_context = response["need_context"]
     if score > 0.75:
-        chats = [message for chatpair in st.session_state.conversation_history for message in chatpair]
+        chats = [message for chatpair in st.session_state.conversation_with_context_history for message in chatpair]
         prompt = f"""
             You are a highly knowledgeable and empathetic nutritionist assistant.
-            Based on the previous conversation answer this followup question without mentioning or hinting at any documents, sources, or external materials.
+            Answer this followup question from the previous conversation (Context more preferable if provided), **Do Not from your own knowledge base else you are fired.**, without mentioning or hinting at any documents, sources, or external materials.
+            If no relevant answer is found in the conversation history, than deny the user politely explaining No relevant Context was found for their question.
             Always keep responses concise (under 250 words), accurate, and user-friendly.
             Never disclose your data source or say "Based on the document..." etc.
             Followup Question: {user_input}"""
+        if need_context:
+            new_query = user_input + st.session_state.user_query_history[-2]
+            retrieved_docs = vector_store.similarity_search_with_relevance_scores(
+                query=new_query,
+                k=2,
+                score_threshold=0.75
+            )
+            context = "\n".join(doc[0].page_content for doc in retrieved_docs)
+            prompt += f"\nContext: {context}"
         chats.append({"role": "user", "content": prompt})
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -101,6 +133,10 @@ def generate_chat_response(user_input: str):
             {"role": "user", "content": user_input},
             {"role": "assistant", "content": assistant_output}
         ])
+        st.session_state.conversation_with_context_history.append([
+            {"role": "user", "content": user_input},
+            {"role": "assistant", "content": assistant_output}
+        ])
         client.close()
     else:
         retrieved_docs = vector_store.similarity_search_with_relevance_scores(
@@ -108,22 +144,28 @@ def generate_chat_response(user_input: str):
             k=2,
             score_threshold=0.75
         )
-
         if retrieved_docs:
             context = "\n".join(doc[0].page_content for doc in retrieved_docs)
-            chat_history_str = "\n".join(
-                f"{msg['role']}: {msg['content']}" for msg in list(sum(st.session_state.conversation_history, []))
-            )
+            # prompt = f"""
+            # You are a highly knowledgeable and empathetic nutritionist assistant.
+            # Your role is to provide clear, evidence-based answers using retrieved information from a trusted knowledge base.
+            # Always keep responses concise (under 250 words), accurate, and user-friendly.
+            # Never disclose your data source or say "Based on the document..." etc.
+            # Chat History: {chat_history_str or "None"}
+            # Question: {user_input}
+            # Context: {context}
+            # Prioritize chat history when answering follow-ups. Only use context if relevant. 
+            # If both lack relevant info, say: "Sorry the question seems Irrelevant." Do not guess or answer from your own knowledge.
+            # """
             prompt = f"""
             You are a highly knowledgeable and empathetic nutritionist assistant.
-            Your role is to provide clear, evidence-based answers using retrieved information from a trusted knowledge base.
+            Your role is to provide clear, evidence-based answers using below retrieved context from a trusted knowledge base.
             Always keep responses concise (under 250 words), accurate, and user-friendly.
-            Never disclose your data source or say "Based on the document..." etc.
-            Chat History: {chat_history_str or "None"}
+            Never disclose your data source or say "Based on the document..., In the provided context..." etc.
             Question: {user_input}
             Context: {context}
-            Prioritize chat history when answering follow-ups. Only use context if relevant. 
-            If both lack relevant info, say: "Sorry the question seems Irrelevant." Do not guess or answer from your own knowledge.
+            Do not any extra information from your own knowledge base.
+            If Context lacks relevant information to answer the question than deny the user politely explain No relevant Context was found for their question. Do not guess or answer from your own knowledge.
             """
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -143,7 +185,12 @@ def generate_chat_response(user_input: str):
                 {"role": "user", "content": user_input},
                 {"role": "assistant", "content": assistant_output}
             ])
-
+            
+            st.session_state.conversation_with_context_history.append([
+                {"role": "user", "content": "Question: " + user_input + "\n context: " + context},
+                {"role": "assistant", "content": assistant_output}
+            ])
+            
             client.close()
         else:
             yield "Sorry the question seems Irrelevant."
